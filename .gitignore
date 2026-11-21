@@ -1,0 +1,18 @@
+# Node dependencies
+frontend/node_modules/
+frontend/dist/
+
+# Compiled class files
+*.class
+backend/target/
+out/
+
+# Log files
+*.log
+
+db.properties
+jobportal.war
+
+# Ignore database credentials and generated WAR files
+db.properties
+*.war
