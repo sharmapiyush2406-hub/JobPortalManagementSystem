@@ -39,7 +39,7 @@ The application has been engineered strictly adhering to **Core Java Web Develop
 |                         JAVA SERVLET LAYER                              |
 |   AuthServlet        -> /api/auth/* (register, login, logout, me)       |
 |   JobServlet         -> /api/jobs/* (CRUD, search, filters)             |
-|   ApplicationServlet -> /api/applications/* (apply, status, workflows)   |
+|   ApplicationServlet -> /api/applications/* (apply, status, workflows)  |
 |   CandidateServlet   -> /api/candidate/* (profile, candidate stats)     |
 |   AdminServlet       -> /api/admin/* (admin stats, candidate directory) |
 +-------------------------------------------------------------------------+
