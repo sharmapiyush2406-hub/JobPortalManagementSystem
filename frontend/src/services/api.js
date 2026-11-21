@@ -1,15 +1,28 @@
 /**
  * API Service for Job Portal Management System
  * Communicates with Core Java Servlet Backend using RESTful JSON.
- * Configured with credentials: 'include' for HttpSession JSESSIONID cookies.
+ * Configured with credentials: 'include' for HttpSession JSESSIONID cookies
+ * and resilient Bearer token header for cross-origin HTTPS deployments.
  */
 
-const BASE_URL = '/api';
+const getBaseUrl = () => {
+  const envUrl = import.meta.env.VITE_API_BASE_URL;
+  if (!envUrl || !envUrl.trim()) {
+    return '/api';
+  }
+  const cleanUrl = envUrl.trim().replace(/\/+$/, '');
+  return cleanUrl.endsWith('/api') ? cleanUrl : `${cleanUrl}/api`;
+};
+
+const BASE_URL = getBaseUrl();
+const SESSION_STORAGE_KEY = 'jobportal_session_id';
 
 async function request(endpoint, options = {}) {
+  const token = localStorage.getItem(SESSION_STORAGE_KEY);
   const defaultHeaders = {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
+    ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
   };
 
   const config = {
@@ -36,7 +49,7 @@ async function request(endpoint, options = {}) {
     return data;
   } catch (err) {
     if (err.name === 'TypeError' && err.message.includes('fetch')) {
-      throw new Error('Could not connect to Java Backend Server. Please ensure Tomcat or DevServer is running on port 8080.');
+      throw new Error('Could not connect to Java Backend Server. Please verify the backend service is running and CORS is configured.');
     }
     throw err;
   }
@@ -46,19 +59,37 @@ async function request(endpoint, options = {}) {
 // AUTHENTICATION APIs
 // ==========================================
 export const authAPI = {
-  register: (payload) => request('/auth/register', {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  }),
+  register: async (payload) => {
+    const data = await request('/auth/register', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    if (data && (data.sessionId || data.token)) {
+      localStorage.setItem(SESSION_STORAGE_KEY, data.sessionId || data.token);
+    }
+    return data;
+  },
 
-  login: (payload) => request('/auth/login', {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  }),
+  login: async (payload) => {
+    const data = await request('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    if (data && (data.sessionId || data.token)) {
+      localStorage.setItem(SESSION_STORAGE_KEY, data.sessionId || data.token);
+    }
+    return data;
+  },
 
-  logout: () => request('/auth/logout', {
-    method: 'POST',
-  }),
+  logout: async () => {
+    try {
+      return await request('/auth/logout', {
+        method: 'POST',
+      });
+    } finally {
+      localStorage.removeItem(SESSION_STORAGE_KEY);
+    }
+  },
 
   getMe: () => request('/auth/me', {
     method: 'GET',

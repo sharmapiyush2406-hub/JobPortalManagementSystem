@@ -3,20 +3,12 @@
 -- Core Java, Servlets, JDBC, MySQL & React Full-Stack Project
 -- ========================================================
 
-DROP DATABASE IF EXISTS job_portal;
-CREATE DATABASE job_portal CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-USE job_portal;
-
-DROP TABLE IF EXISTS applications;
-DROP TABLE IF EXISTS jobs;
-DROP TABLE IF EXISTS users;
-
 -- ========================================================
 -- 1. TABLE: users
 -- Stores both Candidate and Admin accounts
 -- Passwords are encrypted using BCrypt ($2a$10$...)
 -- ========================================================
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
     user_id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
     email VARCHAR(150) NOT NULL UNIQUE,
@@ -29,7 +21,7 @@ CREATE TABLE users (
 -- 2. TABLE: jobs
 -- Stores job postings created and managed by Admin
 -- ========================================================
-CREATE TABLE jobs (
+CREATE TABLE IF NOT EXISTS jobs (
     job_id INT AUTO_INCREMENT PRIMARY KEY,
     title VARCHAR(150) NOT NULL,
     company VARCHAR(150) NOT NULL,
@@ -38,7 +30,10 @@ CREATE TABLE jobs (
     job_type VARCHAR(50) NOT NULL DEFAULT 'Full Time',
     description TEXT NOT NULL,
     requirements TEXT NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_jobs_title (title),
+    INDEX idx_jobs_location (location),
+    INDEX idx_jobs_job_type (job_type)
 ) ENGINE=InnoDB;
 
 -- ========================================================
@@ -46,7 +41,7 @@ CREATE TABLE jobs (
 -- Stores job applications submitted by candidates
 -- Unique constraint prevents duplicate applications
 -- ========================================================
-CREATE TABLE applications (
+CREATE TABLE IF NOT EXISTS applications (
     application_id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,
     job_id INT NOT NULL,
@@ -56,23 +51,17 @@ CREATE TABLE applications (
         REFERENCES users(user_id) ON DELETE CASCADE,
     CONSTRAINT fk_application_job FOREIGN KEY (job_id) 
         REFERENCES jobs(job_id) ON DELETE CASCADE,
-    CONSTRAINT uq_user_job UNIQUE (user_id, job_id)
+    CONSTRAINT uq_user_job UNIQUE (user_id, job_id),
+    INDEX idx_applications_user (user_id),
+    INDEX idx_applications_job (job_id)
 ) ENGINE=InnoDB;
 
--- Indexes for performance
-CREATE INDEX idx_jobs_title ON jobs(title);
-CREATE INDEX idx_jobs_location ON jobs(location);
-CREATE INDEX idx_jobs_job_type ON jobs(job_type);
-CREATE INDEX idx_applications_user ON applications(user_id);
-CREATE INDEX idx_applications_job ON applications(job_id);
-
 -- ========================================================
--- 4. SEED DATA
+-- 4. SEED DATA (Default Admin and Candidates)
 -- Default Admin: admin@jobportal.com / admin123
--- BCrypt Hash: $2a$10$779p3tU3yL2PqZ4lDqL7n.4gYmJjYqYwI0U5m0j6B4L0w7N2E1YKi
--- Sample Candidate: candidate@example.com / candidate123
+-- Sample Candidates: rahul.sharma@example.com, priya.patel@example.com / candidate123
 -- ========================================================
-INSERT INTO users (name, email, password, role) VALUES 
+INSERT IGNORE INTO users (name, email, password, role) VALUES 
 ('System Admin', 'admin@jobportal.com', '$2a$10$np0qkIO.BYbULH4fVafvyusC79ExDVc3fI2fOkWtduNkOILbEpTZe', 'ADMIN'),
 ('Rahul Sharma', 'rahul.sharma@example.com', '$2a$10$DD.m/LHfyFwHQTcsxxa7nO8YDWRTve9Hojw99w4hdjgjInM0299iC', 'CANDIDATE'),
 ('Priya Patel', 'priya.patel@example.com', '$2a$10$DD.m/LHfyFwHQTcsxxa7nO8YDWRTve9Hojw99w4hdjgjInM0299iC', 'CANDIDATE');
@@ -161,7 +150,7 @@ INSERT INTO jobs (title, company, location, salary, job_type, description, requi
 -- 6. SAMPLE APPLICATIONS
 -- Pre-populating some applications for demonstration
 -- ========================================================
-INSERT INTO applications (user_id, job_id, status) VALUES
+INSERT IGNORE INTO applications (user_id, job_id, status) VALUES
 (2, 1, 'Shortlisted'),
 (2, 3, 'Applied'),
 (3, 2, 'Applied'),

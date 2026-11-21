@@ -10,9 +10,15 @@ out/
 # Log files
 *.log
 
+# Database credentials & local env
 db.properties
-jobportal.war
+**/db.properties
+*.properties
+.env
+.env.local
+.env.*.local
 
-# Ignore database credentials and generated WAR files
-db.properties
+# Generated WAR files
 *.war
+backend/jobportal.war
+jobportal.war

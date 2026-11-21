@@ -43,10 +43,22 @@ public class DevServer {
 
     public static void main(String[] args) throws IOException {
         int port = PORT;
-        if (args.length > 0) {
+        String envPort = System.getenv("PORT");
+        if (envPort != null && !envPort.trim().isEmpty()) {
+            try {
+                port = Integer.parseInt(envPort.trim());
+            } catch (Exception ignored) {}
+        } else if (args.length > 0) {
             try {
                 port = Integer.parseInt(args[0]);
             } catch (Exception ignored) {}
+        }
+
+        // Safe database auto-initialization on startup
+        try {
+            InitDB.initDatabase();
+        } catch (Exception e) {
+            System.err.println("[DevServer] Database auto-init notice: " + e.getMessage());
         }
 
         HttpServer server = HttpServer.create(new InetSocketAddress(port), 0);
@@ -57,7 +69,7 @@ public class DevServer {
 
         System.out.println("=======================================================");
         System.out.println(" JOB PORTAL MANAGEMENT SYSTEM - JAVA BACKEND SERVER");
-        System.out.println(" Server running at: http://localhost:" + port + "/");
+        System.out.println(" Server running on port: " + port);
         System.out.println(" REST API available at: http://localhost:" + port + "/api/");
         System.out.println("=======================================================");
 
@@ -171,6 +183,8 @@ public class DevServer {
                 JsonObject res = new JsonObject();
                 res.addProperty("success", true);
                 res.addProperty("message", "Registration successful!");
+                res.addProperty("sessionId", sessionId);
+                res.addProperty("token", sessionId);
                 res.add("user", JsonUtil.getGson().toJsonTree(user));
                 sendJson(exchange, 201, JsonUtil.toJson(res));
             } else {
@@ -192,10 +206,12 @@ public class DevServer {
                 return;
             }
 
-            createSession(exchange, user);
+            String sessionId = createSession(exchange, user);
             JsonObject res = new JsonObject();
             res.addProperty("success", true);
             res.addProperty("message", "Login successful!");
+            res.addProperty("sessionId", sessionId);
+            res.addProperty("token", sessionId);
             res.add("user", JsonUtil.getGson().toJsonTree(user));
             sendJson(exchange, 200, JsonUtil.toJson(res));
         } else if ("/api/auth/logout".equalsIgnoreCase(path) && "POST".equals(method)) {
@@ -477,15 +493,59 @@ public class DevServer {
     // HELPERS: CORS, SESSIONS, JSON, QUERY
     // ==========================================
     private static void addCorsHeaders(HttpExchange exchange) {
-        String origin = exchange.getRequestHeaders().getFirst("Origin");
-        if (origin == null || origin.isEmpty()) origin = "*";
-        exchange.getResponseHeaders().set("Access-Control-Allow-Origin", origin);
-        exchange.getResponseHeaders().set("Access-Control-Allow-Credentials", "true");
+        String allowedFrontend = System.getenv("FRONTEND_URL");
+        if (allowedFrontend == null || allowedFrontend.trim().isEmpty()) {
+            allowedFrontend = System.getenv("CORS_ORIGIN");
+        }
+
+        String requestOrigin = exchange.getRequestHeaders().getFirst("Origin");
+        String originToSet = null;
+
+        if (requestOrigin != null && !requestOrigin.trim().isEmpty()) {
+            String ro = requestOrigin.trim();
+            if (allowedFrontend != null && !allowedFrontend.trim().isEmpty()) {
+                String[] allowedList = allowedFrontend.split(",");
+                boolean matched = false;
+                for (String allowed : allowedList) {
+                    String clean = allowed.trim();
+                    if (clean.equalsIgnoreCase(ro) || clean.equals("*") || clean.equalsIgnoreCase(ro.replaceFirst("/$", ""))) {
+                        originToSet = ro;
+                        matched = true;
+                        break;
+                    }
+                }
+                if (!matched) {
+                    originToSet = allowedList[0].trim();
+                }
+            } else {
+                originToSet = ro;
+            }
+        } else if (allowedFrontend != null && !allowedFrontend.trim().isEmpty() && !allowedFrontend.trim().equals("*")) {
+            originToSet = allowedFrontend.trim().split(",")[0].trim();
+        }
+
+        if (originToSet != null && !originToSet.equals("*")) {
+            exchange.getResponseHeaders().set("Access-Control-Allow-Origin", originToSet);
+            exchange.getResponseHeaders().set("Access-Control-Allow-Credentials", "true");
+        } else {
+            exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
+        }
+
         exchange.getResponseHeaders().set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-        exchange.getResponseHeaders().set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Origin, Accept");
+        exchange.getResponseHeaders().set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Origin, Accept, Cookie");
+        exchange.getResponseHeaders().set("Access-Control-Expose-Headers", "Set-Cookie, Authorization");
     }
 
     private static User getSessionUser(HttpExchange exchange) {
+        // 1. Check Authorization: Bearer <sessionId> header
+        String authHeader = exchange.getRequestHeaders().getFirst("Authorization");
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            String token = authHeader.substring(7).trim();
+            User u = sessions.get(token);
+            if (u != null) return u;
+        }
+
+        // 2. Check Cookie: JSESSIONID=<sessionId>
         String cookieHeader = exchange.getRequestHeaders().getFirst("Cookie");
         if (cookieHeader != null) {
             String[] cookies = cookieHeader.split(";");
@@ -502,11 +562,20 @@ public class DevServer {
     private static String createSession(HttpExchange exchange, User user) {
         String sid = UUID.randomUUID().toString();
         sessions.put(sid, user);
-        exchange.getResponseHeaders().add("Set-Cookie", "JSESSIONID=" + sid + "; Path=/; HttpOnly; SameSite=Lax");
+
+        String proto = exchange.getRequestHeaders().getFirst("X-Forwarded-Proto");
+        boolean isHttps = "https".equalsIgnoreCase(proto) || System.getenv("RENDER") != null;
+        String cookiePolicy = isHttps ? "; SameSite=None; Secure" : "; SameSite=Lax";
+
+        exchange.getResponseHeaders().add("Set-Cookie", "JSESSIONID=" + sid + "; Path=/; HttpOnly" + cookiePolicy);
         return sid;
     }
 
     private static void clearSession(HttpExchange exchange) {
+        String proto = exchange.getRequestHeaders().getFirst("X-Forwarded-Proto");
+        boolean isHttps = "https".equalsIgnoreCase(proto) || System.getenv("RENDER") != null;
+        String cookiePolicy = isHttps ? "; SameSite=None; Secure" : "; SameSite=Lax";
+
         String cookieHeader = exchange.getRequestHeaders().getFirst("Cookie");
         if (cookieHeader != null) {
             String[] cookies = cookieHeader.split(";");
@@ -517,7 +586,13 @@ public class DevServer {
                 }
             }
         }
-        exchange.getResponseHeaders().add("Set-Cookie", "JSESSIONID=deleted; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT");
+
+        String authHeader = exchange.getRequestHeaders().getFirst("Authorization");
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            sessions.remove(authHeader.substring(7).trim());
+        }
+
+        exchange.getResponseHeaders().add("Set-Cookie", "JSESSIONID=deleted; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT" + cookiePolicy);
     }
 
     private static JsonObject parseJson(HttpExchange exchange) throws IOException {
