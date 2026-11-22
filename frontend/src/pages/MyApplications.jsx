@@ -1,13 +1,17 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
+import { applicationAPI } from '../services/api';
+import StatusBadge from '../components/StatusBadge';
+import LoadingSpinner from '../components/LoadingSpinner';
 import { 
   FileText, 
   MapPin, 
   Calendar, 
   IndianRupee, 
   Briefcase, 
-  ExternalLink,
-  Search,
-  Filter
+  ExternalLink, 
+  Search, 
+  Filter 
 } from 'lucide-react';
 import { formatDate } from '../utils/formatDate';
 

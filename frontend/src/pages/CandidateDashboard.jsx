@@ -1,4 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import { Link, useLocation } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import { candidateAPI } from '../services/api';
+import DashboardCard from '../components/DashboardCard';
+import StatusBadge from '../components/StatusBadge';
+import LoadingSpinner from '../components/LoadingSpinner';
 import { 
   Briefcase, 
   FileText, 
