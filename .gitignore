@@ -2,23 +2,33 @@
 frontend/node_modules/
 frontend/dist/
 
-# Compiled class files
+# Compiled class files & build directories
 *.class
 backend/target/
+target/
 out/
 
-# Log files
+# Log & temporary files
 *.log
+*.tmp
 
-# Database credentials & local env
+# Database credentials & local environment files
 db.properties
 **/db.properties
 *.properties
+!db.properties.example
 .env
 .env.local
 .env.*.local
 
-# Generated WAR files
+# Generated archives
 *.war
 backend/jobportal.war
 jobportal.war
+
+# OS metadata & IDE configurations
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.iml
